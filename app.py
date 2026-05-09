@@ -1,96 +1,119 @@
-import re
-import json
+"""
+FinQuery — Streamlit interface for financial document intelligence.
+"""
 import streamlit as st
 from langchain_community.document_loaders import PyPDFLoader
+
 from rag_pipeline import create_rag_pipeline
+
 
 # ---------- PAGE SETUP ----------
 st.set_page_config(page_title="FinQuery", layout="centered")
 st.title("💰 FinQuery — Financial Document Intelligence")
-st.write("Upload a financial document (invoice, receipt, report) and extract structured insights.")
+st.write(
+    "Upload a financial document and extract structured insights "
+    "through natural language queries."
+)
+
 
 # ---------- SESSION STATE ----------
 if "qa_chain" not in st.session_state:
     st.session_state.qa_chain = None
+if "structured_data" not in st.session_state:
+    st.session_state.structured_data = None
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# ---------- STRUCTURED EXTRACTION ----------
-def extract_financial_fields(answer: str) -> dict:
-    fields = {
-        "vendor_name": None,
-        "amount": None,
-        "date": None,
-        "invoice_number": None
-    }
-    amount_match = re.search(r"[\$₹€£]?\s?\d+[\.,]\d{2}", answer)
-    date_match = re.search(r"\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b", answer)
-    if amount_match:
-        fields["amount"] = amount_match.group()
-    if date_match:
-        fields["date"] = date_match.group()
-    return {k: v for k, v in fields.items() if v}
-
-# ---------- ANSWER FORMATTER ----------
-def format_answer(answer: str, question: str) -> str:
-    if not answer or not answer.strip():
-        return "Could not find relevant information in this document."
-    answer = re.sub(r"\s+", " ", answer).strip()
-    fields = extract_financial_fields(answer)
-    if fields:
-        structured = json.dumps(fields, indent=2)
-        return f"{answer}\n\n**Extracted Fields:**\n```json\n{structured}\n```"
-    return answer
 
 # ---------- FILE UPLOAD ----------
-uploaded_file = st.file_uploader("Upload a financial PDF (invoice, receipt, report)", type=["pdf"])
+uploaded_file = st.file_uploader(
+    "Upload a financial PDF (invoice, receipt, report)", type=["pdf"]
+)
 
 if uploaded_file:
-    with st.spinner("Processing financial document..."):
+    with st.spinner("Processing document and extracting fields..."):
         with open("temp.pdf", "wb") as f:
             f.write(uploaded_file.read())
+
         loader = PyPDFLoader("temp.pdf")
         documents = loader.load()
+
         try:
-            st.session_state.qa_chain = create_rag_pipeline(documents)
-            st.success("Document processed! Ask about amounts, vendors, dates, or totals.")
+            qa_chain, structured_data = create_rag_pipeline(documents)
+            st.session_state.qa_chain = qa_chain
+            st.session_state.structured_data = structured_data
+            st.success("Document processed. Structured fields extracted below.")
         except ValueError as e:
             st.error(str(e))
             st.stop()
 
-# ---------- SUGGESTED QUESTIONS ----------
+
+# ---------- STRUCTURED FIELDS DISPLAY ----------
+if st.session_state.structured_data:
+    data = st.session_state.structured_data
+
+    st.markdown("### 📋 Extracted Fields")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Vendor", data.vendor_name or "—")
+    col2.metric("Total Amount", data.total_amount or "—")
+    col3.metric("Invoice #", data.invoice_number or "—")
+
+    with st.expander("View all extracted fields"):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown(f"**Document Type:** {data.document_type or '—'}")
+            st.markdown(f"**Customer:** {data.customer_name or '—'}")
+            st.markdown(f"**Issue Date:** {data.issue_date or '—'}")
+            st.markdown(f"**Due Date:** {data.due_date or '—'}")
+            st.markdown(f"**Payment Terms:** {data.payment_terms or '—'}")
+        with col_b:
+            st.markdown(f"**Currency:** {data.currency or '—'}")
+            st.markdown(f"**Subtotal:** {data.subtotal or '—'}")
+            st.markdown(f"**Tax Amount:** {data.tax_amount or '—'}")
+            st.markdown(f"**Total Amount:** {data.total_amount or '—'}")
+
+        if data.line_items:
+            st.markdown("**Line Items:**")
+            line_items_data = [
+                {
+                    "Description": item.description,
+                    "Quantity": item.quantity or "—",
+                    "Unit Price": item.unit_price or "—",
+                    "Amount": item.amount or "—",
+                }
+                for item in data.line_items
+            ]
+            st.dataframe(line_items_data, hide_index=True, use_container_width=True)
+
+    st.download_button(
+        "📥 Download extracted fields as JSON",
+        data=data.model_dump_json(indent=2),
+        file_name="extracted_fields.json",
+        mime="application/json",
+    )
+
+
+# ---------- Q&A SECTION ----------
 if st.session_state.qa_chain:
-    st.markdown("**Suggested queries:**")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("- What is the total amount?")
-        st.markdown("- Who is the vendor?")
-    with col2:
-        st.markdown("- What is the invoice date?")
-        st.markdown("- What items were purchased?")
+    st.markdown("### 💬 Ask a Question")
+    st.caption(
+        "Suggested: *What is the total amount?* · *Who is the vendor?* · "
+        "*What is the SGST amount?* · *What items were purchased?*"
+    )
 
-    question = st.text_input("Ask a question about the financial document")
+    question = st.text_input("Your question:", key="question_input")
     if question:
-        with st.spinner("Extracting answer..."):
-            raw_answer = st.session_state.qa_chain.invoke(question)
-            final_answer = format_answer(raw_answer, question)
-        st.session_state.history.append((question, final_answer))
+        with st.spinner("Thinking..."):
+            answer = st.session_state.qa_chain.invoke(question)
+        st.session_state.history.append((question, answer))
 
-# ---------- DISPLAY HISTORY ----------
-for q, a in reversed(st.session_state.history):
-    with st.container():
-        st.markdown(
-            f"""
-            <div style="
-                border:1px solid #444;
-                border-radius:10px;
-                padding:15px;
-                margin-bottom:15px;
-                background-color:#111;
-            ">
-                <b>Question:</b><br>{q}<br><br>
-                <b>Answer:</b><br>{a.replace(chr(10), '<br>')}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+
+# ---------- CONVERSATION HISTORY ----------
+if st.session_state.history:
+    st.markdown("### 📜 Conversation")
+    for q, a in reversed(st.session_state.history):
+        with st.container():
+            st.markdown(f"**Q:** {q}")
+            st.markdown(f"**A:** {a}")
+            st.divider()
