@@ -11,3 +11,27 @@ __pycache__/
 
 # OS files
 .DS_Store
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Streamlit
+.streamlit/
+
+# Test PDFs
+temp.pdf
+*.pdf
+!data/sample_invoices/*.pdf
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
