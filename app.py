@@ -1,5 +1,5 @@
 """
-FinQuery — Streamlit interface for financial document intelligence.
+FinQuery - Streamlit interface for financial document intelligence.
 """
 import streamlit as st
 from langchain_community.document_loaders import PyPDFLoader
@@ -9,8 +9,8 @@ from rag_pipeline import create_rag_pipeline
 
 # ---------- PAGE SETUP ----------
 st.set_page_config(page_title="FinQuery", layout="centered")
-st.title("💰 FinQuery — Financial Document Intelligence")
-st.write(
+st.title("FinQuery — Financial Document Intelligence")
+st.caption(
     "Upload a financial document and extract structured insights "
     "through natural language queries."
 )
@@ -46,13 +46,16 @@ if uploaded_file:
         except ValueError as e:
             st.error(str(e))
             st.stop()
+        except Exception as e:
+            st.error(f"Failed to process document: {type(e).__name__}: {e}")
+            st.stop()
 
 
-# ---------- STRUCTURED FIELDS DISPLAY ----------
+# ---------- STRUCTURED FIELDS ----------
 if st.session_state.structured_data:
     data = st.session_state.structured_data
 
-    st.markdown("### 📋 Extracted Fields")
+    st.markdown("### Extracted Fields")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Vendor", data.vendor_name or "—")
@@ -87,16 +90,16 @@ if st.session_state.structured_data:
             st.dataframe(line_items_data, hide_index=True, use_container_width=True)
 
     st.download_button(
-        "📥 Download extracted fields as JSON",
+        "Download extracted fields as JSON",
         data=data.model_dump_json(indent=2),
         file_name="extracted_fields.json",
         mime="application/json",
     )
 
 
-# ---------- Q&A SECTION ----------
+# ---------- Q&A ----------
 if st.session_state.qa_chain:
-    st.markdown("### 💬 Ask a Question")
+    st.markdown("### Ask a Question")
     st.caption(
         "Suggested: *What is the total amount?* · *Who is the vendor?* · "
         "*What is the SGST amount?* · *What items were purchased?*"
@@ -109,9 +112,9 @@ if st.session_state.qa_chain:
         st.session_state.history.append((question, answer))
 
 
-# ---------- CONVERSATION HISTORY ----------
+# ---------- CONVERSATION ----------
 if st.session_state.history:
-    st.markdown("### 📜 Conversation")
+    st.markdown("### Conversation")
     for q, a in reversed(st.session_state.history):
         with st.container():
             st.markdown(f"**Q:** {q}")
