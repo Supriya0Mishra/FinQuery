@@ -1,29 +1,19 @@
-# Virtual environment
-venv/
-.env
-
-# Python cache
-__pycache__/
-*.pyc
-
-# Streamlit
-.streamlit/
-
-# OS files
-.DS_Store
-
-# Environment variables
+# Secrets
 .env
 
 # Python
+venv/
+.venv/
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.ruff_cache/
 
-# Streamlit
+# Streamlit (legacy app)
 .streamlit/
 
-# Test PDFs
+# Uploaded / test documents
 temp.pdf
 *.pdf
 !data/sample_invoices/*.pdf
@@ -35,3 +25,6 @@ temp.pdf
 # OS
 .DS_Store
 Thumbs.db
+
+# Local tooling
+.claude/
